@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual environments
+.venv/
+venv/
+
+# MacOS
+.DS_Store
+
+# Outputs (keep folder, ignore files)
+outputs/*
+!outputs/.gitkeep
+
+# Jupyter (if any later)
+.ipynb_checkpoints/
