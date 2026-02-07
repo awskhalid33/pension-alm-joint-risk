@@ -1,6 +1,4 @@
 numpy
 pandas
-scipy
-statsmodels
-scikit-learn
 matplotlib
+pytest

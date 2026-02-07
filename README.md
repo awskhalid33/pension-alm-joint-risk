@@ -77,22 +77,25 @@ pension_alm/
 │   └── processed/
 │       └── toy_mortality_uk.csv
 ├── outputs/
-└── research/
-    ├── research_note.md
-    └── figures/
+├── tests/
+│── research/
+│    ├── research_note.md
+│    └── figures/
+├── requirements.txt
+├── README.md
+└── .gitignore
 ```
 
 ---
 
 ## Installation
 
-This project intentionally avoids a `requirements.txt` file.
 
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
 pip install --upgrade pip
-pip install numpy pandas matplotlib
+pip install -r requirements.txt
 ```
 
 ---
@@ -151,6 +154,22 @@ Regimes jointly affect interest-rate dynamics and longevity improvement dynamics
 
 ---
 
+## Testing and Validation
+
+Tests verify:
+- Reproducibility of stochastic processes
+- Validity of regime paths
+- Logical behaviour of survival probabilities
+- Correct structure of pension cashflows
+
+Run tests with:
+
+```bash
+pytest
+```
+
+---
+
 ## Limitations
 
 This is a stylised research framework:
@@ -166,5 +185,5 @@ The focus is conceptual insight, not production realism.
 
 ## Disclaimer
 
-This project is for **educational and research purposes only** and does not constitute investment advice.
+This project is for **educational and research purposes only**.
 
