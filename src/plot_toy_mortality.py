@@ -1,19 +1,17 @@
 from __future__ import annotations
 
-import matplotlib.pyplot as plt
-import pandas as pd
-
 from src.config import settings
 from src.io_utils import ensure_dirs_exist
+from src.plotting import get_pyplot
+from src.sim.liability_setup import load_toy_mortality
 
 
 def main() -> None:
+    plt = get_pyplot()
     ensure_dirs_exist([settings.output_dir])
 
-    path = settings.processed_dir / "toy_mortality_uk.csv"
-    df = pd.read_csv(path)
+    df = load_toy_mortality()
 
-    # Plot log mortality over years for a few ages
     ages_to_plot = [55, 65, 75, 85]
     for age in ages_to_plot:
         sub = df[df["age"] == age].sort_values("year")

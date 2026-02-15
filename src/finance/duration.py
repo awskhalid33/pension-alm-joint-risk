@@ -13,16 +13,12 @@ def macaulay_duration_from_curve(
 
     D = sum_t [ t * CF_t * P(0,t) ] / PV
     """
-    pv = 0.0
-    weighted_sum = 0.0
+    t = cf["t"].to_numpy(dtype=float)
+    cf_t = cf["expected_cashflow"].to_numpy(dtype=float)
+    dfs = np.array([float(curve.discount_factor(tt)) for tt in t], dtype=float)
 
-    for _, row in cf.iterrows():
-        t = float(row["t"])
-        cf_t = float(row["expected_cashflow"])
-        df_t = float(curve.discount_factor(t))
-
-        pv += cf_t * df_t
-        weighted_sum += t * cf_t * df_t
+    pv = float(np.sum(cf_t * dfs))
+    weighted_sum = float(np.sum(t * cf_t * dfs))
 
     if pv <= 0.0:
         raise ValueError("PV must be positive to compute duration")
@@ -42,10 +38,11 @@ def modified_duration_from_curve(
     where rates are shifted in parallel by 'shift'.
     """
     # Base PV
-    pv0 = 0.0
-    for _, row in cf.iterrows():
-        t = float(row["t"])
-        pv0 += float(row["expected_cashflow"]) * curve.discount_factor(t)
+    t = cf["t"].to_numpy(dtype=float)
+    cf_t = cf["expected_cashflow"].to_numpy(dtype=float)
+    pv0 = float(np.sum(cf_t * np.array([curve.discount_factor(tt) for tt in t], dtype=float)))
+    if pv0 <= 0.0:
+        raise ValueError("PV must be positive to compute modified duration")
 
     # Shift curve up
     class ShiftedCurve:
@@ -53,12 +50,10 @@ def modified_duration_from_curve(
             z = curve.zero_rate(t) + shift
             return float(np.exp(-z * t))
 
-    pv_up = 0.0
-    pv_down = 0.0
-    for _, row in cf.iterrows():
-        t = float(row["t"])
-        cf_t = float(row["expected_cashflow"])
-        pv_up += cf_t * ShiftedCurve().discount_factor(t)
-        pv_down += cf_t * np.exp(-(curve.zero_rate(t) - shift) * t)
+    shifted = ShiftedCurve()
+    pv_up = float(np.sum(cf_t * np.array([shifted.discount_factor(tt) for tt in t], dtype=float)))
+    pv_down = float(
+        np.sum(cf_t * np.exp(-(np.array([curve.zero_rate(tt) for tt in t], dtype=float) - shift) * t))
+    )
 
     return float(- (pv_up - pv_down) / (2.0 * pv0 * shift))

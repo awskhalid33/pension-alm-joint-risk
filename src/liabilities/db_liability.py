@@ -5,7 +5,7 @@ from dataclasses import dataclass
 import numpy as np
 import pandas as pd
 
-from src.liabilities.survival import t_year_survival
+from src.liabilities.survival import one_year_survival_probs
 
 
 @dataclass(frozen=True)
@@ -38,7 +38,6 @@ def build_expected_cashflows(
     spec: DBLiabilitySpec,
     kappa_shift: float = 0.0,
 ) -> pd.DataFrame:
-
     """
     Build expected pension cashflows by year.
 
@@ -57,31 +56,34 @@ def build_expected_cashflows(
     last_t = spec.max_age - spec.x0
     times = np.arange(0, last_t + 1)
 
-    rows = []
-    for t in times:
-        year = spec.base_year + t
-
-        if t < start_t:
-            benefit = 0.0
-        else:
-            benefit = spec.annual_pension
-
-        surv_prob = t_year_survival(
-            df_mort=df_mort,
-             base_year=spec.base_year,
-             base_age=spec.x0,
-            t=int(t),
-            kappa_shift=kappa_shift,
+    px_by_age = one_year_survival_probs(
+        df_mort=df_mort,
+        year=spec.base_year,
+        kappa_shift=kappa_shift,
+    )
+    ages = spec.x0 + np.arange(last_t, dtype=int)
+    px = px_by_age.reindex(ages)
+    if px.isna().any():
+        missing = ages[px.isna().to_numpy()]
+        raise ValueError(
+            f"Ages {missing.tolist()} missing in mortality table for year={spec.base_year}"
         )
 
+    survival_probs = np.ones(last_t + 1, dtype=float)
+    survival_probs[1:] = np.cumprod(px.to_numpy(dtype=float))
 
-        expected_cf = benefit * surv_prob
-
-        rows.append((t, year, benefit, surv_prob, expected_cf))
+    benefit = np.where(times < start_t, 0.0, float(spec.annual_pension))
+    expected_cf = benefit * survival_probs
+    years = spec.base_year + times
 
     return pd.DataFrame(
-        rows,
-        columns=["t", "year", "benefit", "survival_prob", "expected_cashflow"],
+        {
+            "t": times.astype(int),
+            "year": years.astype(int),
+            "benefit": benefit,
+            "survival_prob": survival_probs,
+            "expected_cashflow": expected_cf,
+        }
     )
 
 
@@ -95,12 +97,11 @@ def present_value_from_expected_cashflows(
     i = float(flat_discount_rate)
     v = 1.0 / (1.0 + i)
 
-    pv = 0.0
-    for _, row in cf.iterrows():
-        t = float(row["t"])
-        pv += float(row["expected_cashflow"]) * (v ** t)
+    t = cf["t"].to_numpy(dtype=float)
+    cf_t = cf["expected_cashflow"].to_numpy(dtype=float)
+    return float(np.sum(cf_t * (v ** t)))
 
-    return float(pv)
+
 def present_value_from_curve(
     cf: pd.DataFrame,
     curve,
@@ -110,10 +111,7 @@ def present_value_from_curve(
 
     curve must have method: discount_factor(t: float) -> float
     """
-    pv = 0.0
-    for _, row in cf.iterrows():
-        t = float(row["t"])
-        df_t = float(curve.discount_factor(t))
-        pv += float(row["expected_cashflow"]) * df_t
-
-    return float(pv)
+    t = cf["t"].to_numpy(dtype=float)
+    cf_t = cf["expected_cashflow"].to_numpy(dtype=float)
+    dfs = np.array([float(curve.discount_factor(tt)) for tt in t], dtype=float)
+    return float(np.sum(cf_t * dfs))

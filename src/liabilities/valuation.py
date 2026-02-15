@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import numpy as np
 import pandas as pd
 
 
@@ -18,22 +19,23 @@ def pv_remaining_cashflows_at_time_k(
 
     curve_model must provide discount_factor(factors, ttm).
     """
-    pv = 0.0
-    for _, row in cf.iterrows():
-        t = float(row["t"])
-        if t < k:
-            continue
+    t = cf["t"].to_numpy(dtype=float)
+    cf_t = cf["expected_cashflow"].to_numpy(dtype=float)
+    mask = t >= float(k)
+    if not np.any(mask):
+        return 0.0
 
-        ttm = t - float(k)
-        if ttm <= 0.0:
-            # cashflow at "now" (rare here)
-            df = 1.0
-        else:
-            df = float(curve_model.discount_factor(curve_factors, ttm))
+    ttm = t[mask] - float(k)
+    dfs = np.array(
+        [
+            1.0 if m <= 0.0 else float(curve_model.discount_factor(curve_factors, m))
+            for m in ttm
+        ],
+        dtype=float,
+    )
+    return float(np.sum(cf_t[mask] * dfs))
 
-        pv += float(row["expected_cashflow"]) * df
 
-    return float(pv)
 def duration_remaining_cashflows_at_time_k(
     cf: pd.DataFrame,
     k: int,
@@ -46,23 +48,22 @@ def duration_remaining_cashflows_at_time_k(
     D(k) = sum_{t>=k} (ttm * CF_t * P_k(ttm)) / PV_k
     where ttm = t - k.
     """
-    pv = 0.0
-    weighted = 0.0
+    t = cf["t"].to_numpy(dtype=float)
+    cf_t = cf["expected_cashflow"].to_numpy(dtype=float)
+    mask = t >= float(k)
+    if not np.any(mask):
+        return float("nan")
 
-    for _, row in cf.iterrows():
-        t = float(row["t"])
-        if t < k:
-            continue
-
-        ttm = t - float(k)
-        if ttm <= 0.0:
-            df = 1.0
-        else:
-            df = float(curve_model.discount_factor(curve_factors, ttm))
-
-        cf_t = float(row["expected_cashflow"])
-        pv += cf_t * df
-        weighted += ttm * cf_t * df
+    ttm = t[mask] - float(k)
+    dfs = np.array(
+        [
+            1.0 if m <= 0.0 else float(curve_model.discount_factor(curve_factors, m))
+            for m in ttm
+        ],
+        dtype=float,
+    )
+    pv = float(np.sum(cf_t[mask] * dfs))
+    weighted = float(np.sum(ttm * cf_t[mask] * dfs))
 
     if pv <= 0.0:
         return float("nan")

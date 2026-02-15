@@ -10,12 +10,21 @@ def _get_mx_series(df_mort: pd.DataFrame, year: int) -> pd.Series:
 
     Returns a Series indexed by age with values m_x.
     """
+    required_cols = {"year", "age", "mx"}
+    missing_cols = required_cols - set(df_mort.columns)
+    if missing_cols:
+        raise ValueError(f"df_mort is missing columns: {sorted(missing_cols)}")
+
     sub = df_mort[df_mort["year"] == year].copy()
     if sub.empty:
         raise ValueError(f"No mortality data found for year={year}")
 
     sub = sub.sort_values("age")
+    if sub["age"].duplicated().any():
+        raise ValueError(f"Duplicate ages detected for year={year}")
     mx_by_age = pd.Series(sub["mx"].to_numpy(), index=sub["age"].to_numpy())
+    if (mx_by_age <= 0).any():
+        raise ValueError("Mortality rates mx must be > 0")
     return mx_by_age
 
 
@@ -26,6 +35,8 @@ def qx_from_mx(mx: np.ndarray) -> np.ndarray:
         q_x = 1 - exp(-m_x)
     """
     mx = np.asarray(mx, dtype=float)
+    if np.any(mx < 0.0):
+        raise ValueError("mx must be >= 0")
     return 1.0 - np.exp(-mx)
 
 
@@ -71,13 +82,11 @@ def t_year_survival(
         return 1.0
 
     px_by_age = one_year_survival_probs(df_mort, base_year, kappa_shift=kappa_shift)
-
-    surv = 1.0
-    for k in range(t):
-        age_k = base_age + k
-        if age_k not in px_by_age.index:
-            raise ValueError(f"Age {age_k} missing in mortality table for year={base_year}")
-        surv *= float(px_by_age.loc[age_k])
-
-    return float(surv)
-
+    ages = np.arange(base_age, base_age + t, dtype=int)
+    px = px_by_age.reindex(ages)
+    if px.isna().any():
+        missing = ages[px.isna().to_numpy()]
+        raise ValueError(
+            f"Ages {missing.tolist()} missing in mortality table for year={base_year}"
+        )
+    return float(np.prod(px.to_numpy(dtype=float)))

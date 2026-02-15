@@ -17,12 +17,21 @@ class MortalityImprovementRW:
     mu: float = -0.01     # about -1% per year in log terms
     sigma: float = 0.01   # volatility
 
+    def __post_init__(self) -> None:
+        if not np.isfinite(self.mu):
+            raise ValueError("mu must be finite")
+        if not np.isfinite(self.sigma) or self.sigma < 0.0:
+            raise ValueError("sigma must be finite and >= 0")
+
     def simulate(
         self,
         n_years: int,
         seed: int = 123,
         kappa0: float = 0.0,
     ) -> np.ndarray:
+        if n_years < 0:
+            raise ValueError("n_years must be >= 0")
+
         rng = np.random.default_rng(seed)
         kappas = np.zeros(n_years + 1, dtype=float)
         kappas[0] = float(kappa0)

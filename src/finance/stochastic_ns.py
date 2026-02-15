@@ -27,6 +27,26 @@ class StochasticNelsonSiegelModel:
     tau: float = 2.5
     dt_years: float = 0.25     # quarterly steps
 
+    def __post_init__(self) -> None:
+        a = np.asarray(self.A, dtype=float)
+        sigma = np.asarray(self.Sigma, dtype=float)
+
+        if a.shape != (3, 3):
+            raise ValueError("A must have shape (3, 3)")
+        if sigma.shape != (3, 3):
+            raise ValueError("Sigma must have shape (3, 3)")
+        if not np.all(np.isfinite(a)) or not np.all(np.isfinite(sigma)):
+            raise ValueError("A and Sigma must contain finite values")
+        if not np.allclose(sigma, sigma.T, atol=1e-12):
+            raise ValueError("Sigma must be symmetric")
+        eigvals = np.linalg.eigvalsh(sigma)
+        if np.min(eigvals) < -1e-12:
+            raise ValueError("Sigma must be positive semi-definite")
+        if self.tau <= 0.0:
+            raise ValueError("tau must be > 0")
+        if self.dt_years <= 0.0:
+            raise ValueError("dt_years must be > 0")
+
     def zero_rate(self, factors: NSFactors, ttm: float) -> float:
         """
         Zero rate for time-to-maturity (ttm) in years, continuous compounding.
@@ -51,6 +71,8 @@ class StochasticNelsonSiegelModel:
         """
         One VAR(1) step.
         """
+        if x.shape != (3,):
+            raise ValueError("x must have shape (3,)")
         eps = rng.multivariate_normal(mean=np.zeros(3), cov=self.Sigma)
         x_next = self.A @ x + eps
         return x_next
@@ -64,9 +86,14 @@ class StochasticNelsonSiegelModel:
         """
         Returns array shape (n_steps+1, 3)
         """
+        if n_steps < 0:
+            raise ValueError("n_steps must be >= 0")
+        if np.asarray(x0).shape != (3,):
+            raise ValueError("x0 must have shape (3,)")
+
         rng = np.random.default_rng(seed)
         x_path = np.zeros((n_steps + 1, 3), dtype=float)
-        x_path[0] = x0
+        x_path[0] = np.asarray(x0, dtype=float)
 
         for t in range(n_steps):
             x_path[t + 1] = self.step(x_path[t], rng)
